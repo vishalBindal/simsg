@@ -4,7 +4,7 @@ gpu: 0
 
 # DATA OPTIONS
 dataset: clevr
-vg_image_dir: ./datasets/clevr/target
+vg_image_dir: ./data/CLEVR_SIMSG/target
 output_dir: experiments/clevr
 checkpoint_name: spade_64_clevr
 log_dir: experiments/clevr/logs/spade_64_clevr

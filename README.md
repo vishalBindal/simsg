@@ -250,3 +250,13 @@ This code is based on the <a href="https://github.com/google/sg2im"> sg2im repos
 
 The following directory is taken from the <a href="https://github.com/NVlabs/SPADE"> SPADE </a> repository:
 - simsg/SPADE/
+
+
+
+## Notes
+
+- edited "path_to_env/lib/python3.6/site-packages/pytorch_ssim/__init__.py" to change window_size/2 to window_size//2 to resolve "TypeError: conv2d(): argument 'padding' must be tuple of ints, not float"
+Possible reason due to pytorch version conflict (used pytorch_ssm v0.1 and pytorch v1.1)
+
+- some edits in PerceptualSimilarity to resolve import errors
+

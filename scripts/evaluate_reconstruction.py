@@ -70,7 +70,7 @@ parser.add_argument('--save_gt_images', default=False, type=bool_flag)
 args = parser.parse_args()
 
 if args.dataset == "clevr":
-    DATA_DIR = "./dataset/clevr/target"
+    DATA_DIR = "./data/CLEVR_SIMSG/target"
     args.data_image_dir = DATA_DIR
 else:
     DATA_DIR = "./datasets/vg/"
@@ -86,7 +86,8 @@ if args.checkpoint is None:
     ckpt = args.exp_dir + args.experiment
     args.checkpoint = './{}_model.pt'.format(ckpt)
 
-CONFIG_FILE = args.exp_dir + 'logs/{}/args.yaml'.format(args.experiment)
+# CONFIG_FILE = args.exp_dir + 'logs/{}/args.yaml'.format(args.experiment)
+CONFIG_FILE = 'args_64_spade_clevr.yaml'
 IMG_SAVE_PATH = args.exp_dir + 'logs/{}/evaluation/'.format(args.experiment)
 RESULT_SAVE_PATH = args.exp_dir + 'logs/{}/evaluation/results/'.format(args.experiment)
 RESULT_FILE = RESULT_SAVE_PATH + '{}/test_results_{}.pickle'

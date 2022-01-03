@@ -47,13 +47,13 @@ from scripts.train_utils import *
 torch.backends.cudnn.benchmark = True
 
 # for clevr, change to './datasets/clevr/target'
-DATA_DIR = os.path.expanduser('./datasets/vg')
+DATA_DIR = os.path.expanduser('./data/CLEVR_SIMSG/target')
 
 
 def argument_parser():
   # helps parsing the same arguments in a different script
   parser = argparse.ArgumentParser()
-  parser.add_argument('--dataset', default='vg', choices=['vg', 'clevr'])
+  parser.add_argument('--dataset', default='vg', choices=['vg', 'clevr', 'robot'])
 
   # Optimization hyperparameters
   parser.add_argument('--batch_size', default=32, type=int)
@@ -78,6 +78,20 @@ def argument_parser():
   parser.add_argument('--vocab_json', default=os.path.join(DATA_DIR, 'vocab.json'))
   parser.add_argument('--max_objects_per_image', default=10, type=int)
   parser.add_argument('--vg_use_orphaned_objects', default=True, type=bool_flag)
+
+  # For robot dataset
+  parser.add_argument('--train_image_dir', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--train_instances_json', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--train_src_image_dir', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--train_src_instances_json', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--val_image_dir', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--val_instances_json', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--val_src_image_dir', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--val_src_instances_json', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--test_image_dir', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--test_instances_json', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--test_src_image_dir', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--test_src_instances_json', default=os.path.join(DATA_DIR, ''))
 
   # Generator options
   parser.add_argument('--mask_size', default=16, type=int) # Set this to 0 to use no masks

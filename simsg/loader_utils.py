@@ -1,9 +1,39 @@
 from simsg.data.vg import SceneGraphNoPairsDataset, collate_fn_nopairs
 from simsg.data.clevr import SceneGraphWithPairsDataset, collate_fn_withpairs
+from simsg.data.robot import RobotDataset
 
 import json
 from torch.utils.data import DataLoader
 
+def build_robot_supervised_train_dsets(args):
+  print("building fully supervised %s dataset" % args.dataset)
+  with open(args.vocab_json, 'r') as f:
+    vocab = json.load(f)
+  dset_kwargs = {
+    'image_dir': args.train_image_dir,
+    'instances_json': args.train_instances_json,
+    'src_image_dir': args.train_src_image_dir,
+    'src_instances_json': args.train_src_instances_json,
+    'image_size': args.image_size,
+    'vocab':vocab
+  }
+  train_dset = RobotDataset(**dset_kwargs)
+  iter_per_epoch = len(train_dset) // args.batch_size
+  print('There are %d iterations per epoch' % iter_per_epoch)
+
+  dset_kwargs['image_dir'] = args.val_image_dir
+  dset_kwargs['instances_json'] = args.val_instances_json
+  dset_kwargs['src_image_dir'] = args.val_src_image_dir
+  dset_kwargs['src_instances_json'] = args.val_src_instances_json
+  val_dset = RobotDataset(**dset_kwargs)
+
+  dset_kwargs['image_dir'] = args.test_image_dir
+  dset_kwargs['instances_json'] = args.test_instances_json
+  dset_kwargs['src_image_dir'] = args.test_src_image_dir
+  dset_kwargs['src_instances_json'] = args.test_src_instances_json
+  test_dset = RobotDataset(**dset_kwargs)
+
+  return vocab, train_dset, val_dset, test_dset
 
 def build_clevr_supervised_train_dsets(args):
   print("building fully supervised %s dataset" % args.dataset)
@@ -121,6 +151,9 @@ def build_train_loaders(args):
     collate_fn = collate_fn_nopairs
   elif args.dataset == 'clevr':
     vocab, train_dset, val_dset, test_dset = build_clevr_supervised_train_dsets(args)
+    collate_fn = collate_fn_withpairs
+  elif args.dataset == 'robot':
+    vocab, train_dset, val_dset, test_dset = build_robot_supervised_train_dsets(args)
     collate_fn = collate_fn_withpairs
 
   loader_kwargs = {
