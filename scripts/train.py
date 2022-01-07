@@ -47,7 +47,7 @@ from scripts.train_utils import *
 torch.backends.cudnn.benchmark = True
 
 # for clevr, change to './datasets/clevr/target'
-DATA_DIR = os.path.expanduser('./data/CLEVR_SIMSG/target')
+DATA_DIR = os.path.expanduser('~/projects/simsg/data/robot_supervised')
 
 
 def argument_parser():
@@ -80,18 +80,18 @@ def argument_parser():
   parser.add_argument('--vg_use_orphaned_objects', default=True, type=bool_flag)
 
   # For robot dataset
-  parser.add_argument('--train_image_dir', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--train_instances_json', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--train_src_image_dir', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--train_src_instances_json', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--val_image_dir', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--val_instances_json', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--val_src_image_dir', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--val_src_instances_json', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--test_image_dir', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--test_instances_json', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--test_src_image_dir', default=os.path.join(DATA_DIR, ''))
-  parser.add_argument('--test_src_instances_json', default=os.path.join(DATA_DIR, ''))
+  parser.add_argument('--train_image_dir', default=os.path.join(DATA_DIR, 'train1/train_images'))
+  parser.add_argument('--train_instances_json', default=os.path.join(DATA_DIR, 'train1/instances_train.json'))
+  parser.add_argument('--train_src_image_dir', default=os.path.join(DATA_DIR, 'train0/train_images'))
+  parser.add_argument('--train_src_instances_json', default=os.path.join(DATA_DIR, 'train0/instances_train.json'))
+  parser.add_argument('--val_image_dir', default=os.path.join(DATA_DIR, 'val1/val_images'))
+  parser.add_argument('--val_instances_json', default=os.path.join(DATA_DIR, 'val1/instances_val.json'))
+  parser.add_argument('--val_src_image_dir', default=os.path.join(DATA_DIR, 'val0/val_images'))
+  parser.add_argument('--val_src_instances_json', default=os.path.join(DATA_DIR, 'val0/instances_val.json'))
+  parser.add_argument('--test_image_dir', default=os.path.join(DATA_DIR, 'val1/val_images'))
+  parser.add_argument('--test_instances_json', default=os.path.join(DATA_DIR, 'val1/instances_val.json'))
+  parser.add_argument('--test_src_image_dir', default=os.path.join(DATA_DIR, 'val0/val_images'))
+  parser.add_argument('--test_src_instances_json', default=os.path.join(DATA_DIR, 'val0/instances_val.json'))
 
   # Generator options
   parser.add_argument('--mask_size', default=16, type=int) # Set this to 0 to use no masks
@@ -247,8 +247,6 @@ def check_model(args, t, loader, model):
 
   num_samples = 0
   all_losses = defaultdict(list)
-  total_iou = 0
-  total_boxes = 0
   with torch.no_grad():
     for batch in loader:
       batch = [tensor.cuda() for tensor in batch]
@@ -257,7 +255,7 @@ def check_model(args, t, loader, model):
 
       if args.dataset == "vg" or (args.dataset == "clevr" and not args.is_supervised):
         imgs, objs, boxes, triples, obj_to_img, triple_to_img, imgs_in = batch
-      elif args.dataset == "clevr":
+      elif args.dataset == "clevr" or args.dataset == 'robot':
         imgs, imgs_src, objs, objs_src, boxes, boxes_src, triples, triples_src, obj_to_img, \
         triple_to_img, imgs_in = batch
 
@@ -265,15 +263,12 @@ def check_model(args, t, loader, model):
 
       model_out = model(objs, triples, obj_to_img, boxes_gt=boxes, masks_gt=model_masks,
                         src_image=imgs_in, imgs_src=imgs_src)
-      imgs_pred, boxes_pred, masks_pred, _, _ = model_out
+      imgs_pred, masks_pred, _, _ = model_out
 
       skip_pixel_loss = False
       total_loss, losses = calculate_model_losses(
                                 args, skip_pixel_loss, imgs, imgs_pred,
-                                boxes, boxes_pred)
-
-      total_iou += jaccard(boxes_pred, boxes)
-      total_boxes += boxes_pred.size(0)
+                                boxes)
 
       for loss_name, loss_val in losses.items():
         all_losses[loss_name].append(loss_val)
@@ -290,13 +285,12 @@ def check_model(args, t, loader, model):
     model_out = model(objs, triples, obj_to_img, boxes_gt=boxes, src_image=imgs_in, imgs_src=imgs_src)
     samples['generated_img_gt_box'] = model_out[0]
 
-    samples['masked_img'] = model_out[3][:,:3,:,:]
+    samples['masked_img'] = model_out[2][:,:3,:,:]
 
     for k, v in samples.items():
       samples[k] = imagenet_deprocess_batch(v)
 
     mean_losses = {k: np.mean(v) for k, v in all_losses.items()}
-    avg_iou = total_iou / total_boxes
 
     masks_to_store = masks
     if masks_to_store is not None:
@@ -313,10 +307,9 @@ def check_model(args, t, loader, model):
     'triples': triples.detach().cpu().clone(),
     'obj_to_img': obj_to_img.detach().cpu().clone(),
     'triple_to_img': triple_to_img.detach().cpu().clone(),
-    'boxes_pred': boxes_pred.detach().cpu().clone(),
     'masks_pred': masks_pred_to_store
   }
-  out = [mean_losses, samples, batch_data, avg_iou]
+  out = [mean_losses, samples, batch_data]
 
   return tuple(out)
 
@@ -411,7 +404,7 @@ def main(args):
 
       if args.dataset == "vg" or (args.dataset == "clevr" and not args.is_supervised):
         imgs, objs, boxes, triples, obj_to_img, triple_to_img, imgs_in = batch
-      elif args.dataset == "clevr":
+      elif args.dataset == "clevr" or args.dataset == 'robot':
         imgs, imgs_src, objs, objs_src, boxes, boxes_src, triples, triples_src, obj_to_img, \
         triple_to_img, imgs_in = batch
 
@@ -421,18 +414,18 @@ def main(args):
 
         model_out = model(objs, triples, obj_to_img,
                           boxes_gt=model_boxes, masks_gt=model_masks, src_image=imgs_in, imgs_src=imgs_src, t=t)
-        imgs_pred, boxes_pred, masks_pred, layout_mask, _ = model_out
+        imgs_pred, masks_pred, layout_mask, _ = model_out
 
       with timeit('loss', args.timing):
         # Skip the pixel loss if not using GT boxes
         skip_pixel_loss = (model_boxes is None)
         total_loss, losses = calculate_model_losses(
                                 args, skip_pixel_loss, imgs, imgs_pred,
-                                boxes, boxes_pred)
+                                boxes)
 
       if obj_discriminator is not None:
 
-        obj_discr_ids = model_out[4]
+        obj_discr_ids = model_out[3]
 
         if obj_discr_ids is not None:
           if args.selective_discr_obj and torch.sum(obj_discr_ids) > 0:
@@ -519,7 +512,7 @@ def main(args):
         d_obj_losses = LossManager()
         imgs_fake = imgs_pred.detach()
 
-        obj_discr_ids = model_out[4]
+        obj_discr_ids = model_out[3]
 
         if obj_discr_ids is not None:
           if args.selective_discr_obj and torch.sum(obj_discr_ids) > 0:
@@ -587,16 +580,13 @@ def main(args):
       if t % args.checkpoint_every == 0:
         print('checking on train')
         train_results = check_model(args, t, train_loader, model)
-        t_losses, t_samples, t_batch_data, t_avg_iou = train_results
+        t_losses, t_samples, t_batch_data = train_results
 
         checkpoint['checkpoint_ts'].append(t)
-        checkpoint['train_iou'].append(t_avg_iou)
 
         print('checking on val')
         val_results = check_model(args, t, val_loader, model)
-        val_losses, val_samples, val_batch_data, val_avg_iou = val_results
-
-        checkpoint['val_iou'].append(val_avg_iou)
+        val_losses, val_samples, val_batch_data = val_results
 
         # write images to tensorboard
         train_samples_viz = torch.cat((t_samples['gt_img'][:args.max_num_imgs, :, :, :],
@@ -610,11 +600,6 @@ def main(args):
         writer.add_image('Train samples', make_grid(train_samples_viz, nrow=4, padding=4), global_step=t)
         writer.add_image('Val samples', make_grid(val_samples_viz, nrow=4, padding=4), global_step=t)
 
-        print('train iou: ', t_avg_iou)
-        print('val iou: ', val_avg_iou)
-        # write IoU to tensorboard
-        writer.add_scalar('train mIoU', t_avg_iou, global_step=t)
-        writer.add_scalar('val mIoU', val_avg_iou, global_step=t)
         # write losses to tensorboard
         for k, v in t_losses.items():
           writer.add_scalar('Train {}'.format(k), v, global_step=t)

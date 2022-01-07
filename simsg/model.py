@@ -86,30 +86,7 @@ class SIMSGModel(nn.Module):
             else:
                 gconv_input_dims = embedding_dim + 4
 
-        if gconv_num_layers == 0:
-            self.gconv = nn.Linear(gconv_input_dims, gconv_dim)
-        elif gconv_num_layers > 0:
-            gconv_kwargs = {
-                'input_dim_obj': gconv_input_dims,
-                'input_dim_pred': embedding_dim,
-                'output_dim': gconv_dim,
-                'hidden_dim': gconv_hidden_dim,
-                'pooling': gconv_pooling,
-                'mlp_normalization': mlp_normalization,
-            }
-            self.gconv = GraphTripleConv(**gconv_kwargs)
-
-        self.gconv_net = None
-        if gconv_num_layers > 1:
-            gconv_kwargs = {
-                'input_dim_obj': gconv_dim,
-                'input_dim_pred': gconv_dim,
-                'hidden_dim': gconv_hidden_dim,
-                'pooling': gconv_pooling,
-                'num_layers': gconv_num_layers - 1,
-                'mlp_normalization': mlp_normalization,
-            }
-            self.gconv_net = GraphTripleConvNet(**gconv_kwargs)
+        gconv_dim = gconv_input_dims
 
         box_net_dim = 4
         box_net_layers = [gconv_dim, gconv_hidden_dim, box_net_dim]
@@ -216,70 +193,13 @@ class SIMSGModel(nn.Module):
         - get_layout_boxes: boolean. If true, the boxes used for final layout construction are returned
         """
 
-        assert mode in ["train", "eval", "auto_withfeats", "auto_nofeats", "reposition", "remove", "replace", "addition"]
-
-        evaluating = mode != 'train'
-
         in_image = src_image.clone()
         num_objs = objs.size(0)
-        s, p, o = triples.chunk(3, dim=1)  # All have shape (num_triples, 1)
-        s, p, o = [x.squeeze(1) for x in [s, p, o]]  # Now have shape (num_triples,)
-        edges = torch.stack([s, o], dim=1)  # Shape is (num_triples, 2)
 
         obj_vecs = self.obj_embeddings(objs)
 
         if obj_to_img is None:
             obj_to_img = torch.zeros(num_objs, dtype=objs.dtype, device=objs.device)
-
-        if combine_gt_pred_box_idx is None:
-            combine_gt_pred_box_idx = torch.zeros_like(objs)
-
-        if not (self.is_baseline or self.is_supervised):
-
-            box_ones = torch.ones([num_objs, 1], dtype=boxes_gt.dtype, device=boxes_gt.device)
-            box_keep, feats_keep = self.prepare_keep_idx(evaluating, box_ones, in_image.size(0), obj_to_img,
-                                                         keep_box_idx, keep_feat_idx)
-
-            boxes_prior = boxes_gt * box_keep
-
-            obj_crop = get_cropped_objs(in_image, boxes_gt, obj_to_img, feats_keep, box_keep, evaluating, mode)
-
-            high_feats = self.high_level_feats(obj_crop)
-
-            high_feats = high_feats.view(high_feats.size(0), -1)
-            high_feats = self.high_level_feats_fc(high_feats)
-
-            feats_prior = high_feats * feats_keep
-
-            if evaluating and random_feats:
-                # fill with noise the high level visual features, if the feature is masked/dropped
-                normal_dist = tdist.Normal(loc=get_mean(self.spade_blocks), scale=get_std(self.spade_blocks))
-                highlevel_noise = normal_dist.sample([high_feats.shape[0]])
-                feats_prior += highlevel_noise.cuda() * (1 - feats_keep)
-
-            # when a query image is used to generate an object of the same category
-            if query_feats is not None:
-                feats_prior[query_idx] = query_feats
-
-            if self.feats_in_gcn:
-                obj_vecs = torch.cat([obj_vecs, boxes_prior, feats_prior], dim=1)
-
-            else:
-                obj_vecs = torch.cat([obj_vecs, boxes_prior], dim=1)
-            obj_vecs = self.layer_norm(obj_vecs)
-
-        pred_vecs = self.pred_embeddings(p)
-
-        # GCN pass
-        if isinstance(self.gconv, nn.Linear):
-            obj_vecs = self.gconv(obj_vecs)
-        else:
-            obj_vecs, pred_vecs = self.gconv(obj_vecs, pred_vecs, edges)
-        if self.gconv_net is not None:
-            obj_vecs, pred_vecs = self.gconv_net(obj_vecs, pred_vecs, edges)
-
-        # Box prediction network
-        boxes_pred = self.box_net(obj_vecs)
 
         # Mask prediction network
         masks_pred = None
@@ -287,61 +207,11 @@ class SIMSGModel(nn.Module):
             mask_scores = self.mask_net(obj_vecs.view(num_objs, -1, 1, 1))
             masks_pred = mask_scores.squeeze(1).sigmoid()
 
-        if not (self.is_baseline or self.is_supervised) and self.feats_out_gcn:
-            obj_vecs = torch.cat([obj_vecs, feats_prior], 1)
-            obj_vecs = self.layer_norm2(obj_vecs)
-
-        use_predboxes = False
-
         H, W = self.image_size
 
-        if self.is_baseline or self.is_supervised:
+        layout_boxes = boxes_gt
 
-            layout_boxes = boxes_pred if boxes_gt is None else boxes_gt
-            box_ones = torch.ones([num_objs, 1], dtype=boxes_gt.dtype, device=boxes_gt.device)
-
-            box_keep = self.prepare_keep_idx(evaluating, box_ones, in_image.size(0), obj_to_img, keep_box_idx,
-                                                keep_feat_idx, with_feats=False)
-
-            # mask out objects
-            if not evaluating:
-                keep_image_idx = box_keep
-
-            for box_id in range(keep_image_idx.size(0)):
-                if keep_image_idx[box_id] == 0:
-                    in_image = mask_image_in_bbox(in_image, boxes_gt, box_id, obj_to_img)
-            generated = None
-
-        else:
-            if use_predboxes:
-                layout_boxes = boxes_pred
-            else:
-                layout_boxes = boxes_gt.clone()
-
-            if evaluating:
-                # should happen on evaluation only
-                # drop region in image corresponding to predicted box
-                # so that a new content/object is generated there
-                for idx in range(len(keep_box_idx)):
-                    if keep_box_idx[idx] == 0 and combine_gt_pred_box_idx[idx] == 0:
-                        in_image = mask_image_in_bbox(in_image, boxes_pred, idx, obj_to_img)
-                        layout_boxes[idx] = boxes_pred[idx]
-
-                    if keep_box_idx[idx] == 0 and combine_gt_pred_box_idx[idx] == 1:
-                        layout_boxes[idx] = combine_boxes(boxes_gt[idx], boxes_pred[idx])
-                        in_image = mask_image_in_bbox(in_image, layout_boxes, idx, obj_to_img)
-
-            generated = torch.zeros([obj_to_img.size(0)], device=obj_to_img.device,
-                                                        dtype=obj_to_img.dtype)
-            if not evaluating:
-                keep_image_idx = box_keep * feats_keep
-
-            for idx in range(len(keep_image_idx)):
-                if keep_image_idx[idx] == 0:
-                    in_image = mask_image_in_bbox(in_image, boxes_gt, idx, obj_to_img)
-                    generated[idx] = 1
-
-            generated = generated > 0
+        generated = None
 
         if masks_pred is None:
             layout = boxes_to_layout(obj_vecs, layout_boxes, obj_to_img, H, W,
@@ -388,9 +258,9 @@ class SIMSGModel(nn.Module):
         #    visualize_layout(img, in_image, visualize_layout, obj_vecs, layout_boxes, layout_masks,
         #                     obj_to_img, H, W)
         if get_layout_boxes:
-            return img, boxes_pred, masks_pred, in_image, generated, layout_boxes
+            return img, masks_pred, in_image, generated, layout_boxes
         else:
-            return img, boxes_pred, masks_pred, in_image, generated
+            return img, masks_pred, in_image, generated
 
     def forward_visual_feats(self, img, boxes):
         """

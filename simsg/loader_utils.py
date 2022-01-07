@@ -14,8 +14,7 @@ def build_robot_supervised_train_dsets(args):
     'instances_json': args.train_instances_json,
     'src_image_dir': args.train_src_image_dir,
     'src_instances_json': args.train_src_instances_json,
-    'image_size': args.image_size,
-    'vocab':vocab
+    'image_size': args.image_size
   }
   train_dset = RobotDataset(**dset_kwargs)
   iter_per_epoch = len(train_dset) // args.batch_size
@@ -143,7 +142,7 @@ def build_train_dsets(args):
   return vocab, train_dset, val_dset
 
 
-def build_train_loaders(args):
+def build_train_loaders(args, shuffle_train=True):
 
   print(args.dataset)
   if args.dataset == 'vg' or (args.dataset == "clevr" and not args.is_supervised):
@@ -159,7 +158,7 @@ def build_train_loaders(args):
   loader_kwargs = {
     'batch_size': args.batch_size,
     'num_workers': args.loader_num_workers,
-    'shuffle': True,
+    'shuffle': shuffle_train,
     'collate_fn': collate_fn,
   }
   train_loader = DataLoader(train_dset, **loader_kwargs)

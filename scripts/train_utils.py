@@ -23,7 +23,7 @@ def add_loss(total_loss, curr_loss, loss_dict, loss_name, weight=1):
   return total_loss
 
 
-def calculate_model_losses(args, skip_pixel_loss, img, img_pred, bbox, bbox_pred):
+def calculate_model_losses(args, skip_pixel_loss, img, img_pred, bbox):
 
   total_loss = torch.zeros(1).to(img)
   losses = {}
@@ -37,10 +37,6 @@ def calculate_model_losses(args, skip_pixel_loss, img, img_pred, bbox, bbox_pred
 
   total_loss = add_loss(total_loss, l1_pixel_loss, losses, 'L1_pixel_loss',
                         l1_pixel_weight)
-
-  loss_bbox = F.mse_loss(bbox_pred, bbox)
-  total_loss = add_loss(total_loss, loss_bbox, losses, 'bbox_pred',
-                        args.bbox_pred_loss_weight)
 
   return total_loss, losses
 
