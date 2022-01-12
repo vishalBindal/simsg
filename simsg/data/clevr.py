@@ -296,8 +296,8 @@ def collate_fn_withpairs(batch):
     triples[:, 2] += obj_offset
     all_triples.append(triples)
 
-    triples_src[:, 0] += obj_offset
-    triples_src[:, 2] += obj_offset
+    # triples_src[:, 0] += obj_offset
+    # triples_src[:, 2] += obj_offset
     all_triples_src.append(triples_src)
 
     all_obj_to_img.append(torch.LongTensor(num_objs).fill_(i))
