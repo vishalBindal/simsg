@@ -81,7 +81,7 @@ for typ in types:
 for i, scene in enumerate(sorted(os.listdir(os.path.join(dataset_dir, mode)))):
     if i%20==0:
         print(i, scene)
-    image_path = os.path.join(dataset_dir, mode, scene, 'S00', 'rgba.png')
+    image_path = os.path.join(dataset_dir, mode, scene, 'S0'+str(scene_no), 'rgba.png')
     h,w,_ = cv2.imread(image_path).shape
     shutil.copyfile(image_path, os.path.join(images_dir, f'{i}.png'))
     
@@ -93,7 +93,7 @@ for i, scene in enumerate(sorted(os.listdir(os.path.join(dataset_dir, mode)))):
     })
     
     if get_masks:
-        mask_path = os.path.join(dataset_dir, mode, scene, 'S00', 'mask.png')
+        mask_path = os.path.join(dataset_dir, mode, scene, 'S0'+str(scene_no), 'mask.png')
         
         mask = cv2.imread(mask_path)
         mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
@@ -116,7 +116,7 @@ for i, scene in enumerate(sorted(os.listdir(os.path.join(dataset_dir, mode)))):
         masks_chosen = set()
 
     for j in range(6):
-        bbox = data['objects'][i][0][j][:4].tolist()
+        bbox = data['objects'][i][scene_no][j][:4].tolist()
         x1,y1,x2,y2 = h * bbox[0], w * bbox[1], h * bbox[2], w * bbox[3]
         bbox = [y1,x1,y2-y1,x2-x1]
         category = data['object_color'][i][j]
