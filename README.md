@@ -2,6 +2,29 @@
 
 This is the code accompanying the paper
 
+---
+
+### NOTE: Updates for robot dataset
+
+### Setup
+1. Follow setup instructions given in the below sections (for original repo) to set up the required packages. \
+Note: You can use pytorch 1.1 as well (`module load apps/anaconda/3` on HPC)
+2. Set up the dataset by unzipping the concerned zip file in a directory `data`. Ensure `DATA_DIR` and other paths (`train_image_dir`, `train_instances_json`, etc.) are set correctly in `scripts/train.py` \
+You can also use the script `create_robot_dset.py` to get the above data using the complete dataset files.
+
+### Training
+1. Adjust config in `args_64_spade_robot.yaml` and run:
+```
+python3 -m scripts.run_train args_64_spade_robot.yaml
+``` 
+2. During training, you can monitor loss plots and generated images by running tensorboard. See `run_tensorboard.sh`. 
+
+### Evaluation
+
+See `scripts/evaluate_robot.py` and `scripts/evaluate_robot_metrics.py` to save images, and report some metrics, respectively.
+
+---
+
 **Semantic Image Manipulation Using Scene Graphs | <a href="https://arxiv.org/pdf/2004.03677.pdf">arxiv</a>** <br/>
 Helisa Dhamo*, Azade Farshad*, Iro Laina, Nassir Navab, Gregory D. Hager, Federico Tombari, Christian Rupprecht <br/>
 **CVPR 2020**
